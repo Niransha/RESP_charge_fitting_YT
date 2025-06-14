@@ -1,0 +1,735 @@
+why we doing charge fitting : 
+to transfer charges easily between common functional groups.
+also to ensure that rotationally degenerate atoms,have equivalent (equal in value) charges. (such as methyl and methylene hydrogens) 
+ 
+"Previously, the major weaknesses of these charges have been that they were not easily transferable between common functional groups in related molecules," 
+
+" they (charges) have often been conformationally dependent, and the large charges that frequently occur can be problematic for simulating intramolecular interactions. Introducing restraints in the form of a penalty function into the fitting process considerably reduces the above problems ..." 
+J. Phys. Chem. 1993,97, 10269-10280,
+
+
+
+Hello Guys, I'm going to bring you some advance Amber tutotial, 
+lets have a look first, 
+
+we have 4 sections, 
+
+lets start, 
+
+i'm reading this article live, so you can skip, whenever you want,
+
+In AMBER the method used for charge derivation is called the Restrained Electrostatic Potential (RESP) method. 
+
+we can do same type of calculaton in Gaussian too,  HF/6-31G* QM - gaussian 
+
+There are several options for charge fitting in AMBER. 
+Antechamber - single ligand 
+and RESP - Antechamber has not desicnged to handle bonded residues, or rotationally degenerate atoms
+
+this tutorial is all about charge fitting 
+
+i'm gonna pause when i read and come back for something imortant !
+
+	0.1 before we can do this we need to deal with the bond that would normally link the dye to the linker.
+	1. First we need to optimize the geometry, 
+	2. then we need to generate an electrostatic potential 
+	3. finally we need to run the RESP procedure.
+
+	note that these sum to zero charge in each case.
+
+#################################
+i) Optimize Geometry
+#################################
+
+The first stage is to optimize our capped dye. This needs to be done o capping groups with the charges that they are assigned in the AMBER FF9X force fields. You should note that theswith a QM method at a reasonably high level of theory. MP2/6-31G* to optimize 
+
+Investigations showed that the dye has two minima that are in different conformations but equivalent in energy. 
+
+lets look into gaussian input files, 
+
+Gaussian to pdb > using 
+	1. Newzmat 
+	2. WebMO
+	3. Babel -- I'll show you how to use babel
+
+
+first install babel, 
+sudo apt-get update -y
+sudo apt-get install -y babel
+
+babel [-i<input-type>] <name> [-o<output-type>] <name>
+
+To see a list of recognized file formats use
+  babel -L formats
+
+
+so many formats
+
+babel -ig09 floF_opt.gout -opdb aa.pdb
+
+babel is easy :)
+
+How to find Gaussian optimize coordinates ? this is a big file contain 19852 columns
+o capping groups with the charges that they are assigned in the AMBER FF9X force fields. You should note that thes
+this molecule has optimized...
+
+if you use Joe, use K+F to find then type Conv, press enter once , then ctrl+L will make you jump to next "converge" location. 
+
+
+these are the coordinates, 
+
+the terminal i'm using called terminator...
+
+###########################################
+ii) Calculate Electrostatic Potential
+#############################################
+
+
+#P HF/6-31G* SCF=Tight Pop=MK IOp(6/33=2,6/41=10,6/42=17)
+
+IOp 6/33=2 makes Gaussian write out the potential points and the potentials - Do not change.
+IOp 6/41=10 specifies that 10 concentric layers of points are used for each atom.
+IOp 6/42=17 specifies the density points in each layer - 17 gives 2500 points per atom
+
+
+Note that the use of 6/41=10 and 6/42=17 is specific to this project in order to increase the number of grid points that Gaussian produces. this sentence is bit complex, gaussian create some layers over a molecule when we do charge fitting, those layers can be consider as a grid, 
+those are parameters of this layer,
+
+most 'standard' RESP fits these should not be included and just the IOp(6/33=2) is needed.
+
+Geom=check , used to refer the optimized structure from *.chk file, so no need to input coordinates again 
+
+
+This is basically for now, we do Optimize Geometry using MP2/6-31G* OR B3LYP/6-31G* we get optimized coordinates...
+then using those coordinates,, we do Calculate Electrostatic Potential, This is somethisn I kind of do not know by now , lets check the output file. 
+
+this Electrostatic Potentia output file is totaly charging stuff, with 190000+ lines :O
+
+next step is fitting those charges to pdb , lets see whats happening, 
+
+#####################################################
+iii) Convert the Gaussian ESP data into the RESP format
+######################################################
+
+Okay guys , see this, 
+I think this ESP fit center are grid points,
+atomic centers are atom locations
+not sure what is that 1 2 3 4 etc..
+lets look at spaces after Fit 
+there are so many things here, but for now skip that part, I think I need to look into gaussin manual 
+
+okay everything is explained here,
+ 
+ %%%%%%%%%%%%
+	## RESP only reads in ESP data in a specific file format. To convert from the Gaussian output format to the RESP input format, we will use the following script:
+  %%%%%%%%%%%%%
+	esp.sh
+	#!/bin/csh
+	xlf /usr/local/apps/amber9/src/resp/readit.f
+	grep "Atomic Center " $1 > a
+	grep "ESP Fit" $1 > b
+	grep "Fit    " $1 > c
+	./a.out 
+	rm -f a b c a.out readit.o
+  %%%%%%%%%%%%%%%
+
+we get a file with line numbers, 
+
+nl floB_hf.gout > floB_hf.gout_line_numbers
+
+	%%%%%%%%%%%%%
+	Atomic Center    1 is at   7.127640   .120744  -.032564
+	Atomic Center    2 is at   7.345002  -.099693 -1.079630
+	...
+	Atomic Center    42 is at  -4.823702  2.342669  -.413287
+	ESP Fit Center   43 is at   7.127640   .120744  2.067436
+	...
+	ESP Fit Center **** is at  -6.585767  1.848962 -2.848473
+	ESP Fit Center **** is at  -6.502128  1.613625 -2.848473
+	%%%%%%%%%%%%%%
+
+
+>./esp.sh floB_hf.gout
+enter natom,nesp:
+
+count attomic ceners manually, 
+
+let the machine serch for this readit.f file and continue on this
+some search terms for you...
+sudo find . -print | grep -i readit
+grep -R "readit"
+
+need to fix the codes but do not know where the files are located, :/
+
+We can now run the esp.sh:
+
+>./esp.sh floB_hf.gout
+enter natom,nesp:
+
+So we enter 42, 94681.
+
+
+however this code will output these floB_esp.dat, floF_esp.dat
+
+
+cat floB_esp.dat floF_esp.dat > floBF_esp.dat 
+
+here floB_esp.dat then floF_esp.dat append to floBF_esp.dat 
+
+
+######################################
+iv) Generate the input files for RESP
+######################################
+
+normally carries out a RESP fit in two stages.
+	1. first stage all atoms are allowed to vary							######################################
+	2. in a second stage all degenerate hydrogen atoms are constrained to have equal charge and refit
+    ################################ we dont have methyl or methylene groups here, so, no second stage
+																##it has an NME methyl group, already fixed
+
+we want to do a ***multiconformational RESP *** fit since we have the two similar states.
+
+$$$$$$$$$$$$$$$$$$$$$$$$
+ first stage 
+$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+
+#### file - section 1 ### 	
+ nmol=2,
+ ihfree=1,
+ qwt=0.0005,
+ iqopt=2,
+ /
+
+
+nmol=2 RESP - multiconformational fit over two 'molecules' (two conformations of the dye).
+ihfree=1 weak restraint on the heavy atoms.
+qwt=0.0005 Strength of the restraint in A.U.
+iqopt=2 tells RESP to read in initial charges from a *.in file in the form of Lagrange constraints. This is so we can fix the NME "LIKE" cap charges.
+
+
+#### file - section 2 ### 
+
+1.0   ←weighting factor 
+floB
+   -2   42 # Total charge | Number of atoms (in both molecules )
+    6   -1 # atomic number | the second column is N. N = -1, 0 or a positive integer
+    1   -1
+    1   -1
+    1   -1
+    7   -1
+    1   -1
+    6    0
+    8    0
+    6    0
+    6    0
+    1    0
+    6    0
+    6    0
+    8    0
+    8    0
+    6    0
+...
+atomic number | the second column is N. N = -1, 0 or a positive integer
+
+
+The first value (1.0) is a weighting factor for the multi-molecule fit
+next line (floB) is just an identifier comment.
+In this case we set it to 1.0 for both since we want them weighted equally.
+## I'm trying to deal with RNA so it should be -1, so later I can add some ions to the system and neutralize, 
+
+
+line specifying the total charge and the number of atoms (-2   42).
+in the same order as in the QM calculation.
+
+*** N=-1 then it tells RESP that this atom's charge should be read from the qin file and constrained to this value
+*** A 0 means that it is free to change
+*** a positive integer allows you to specify that two atoms have the same charge (use in the second stage of the fit)
+
+Note for those entries that are not zero there must be an equivalent -1 in the RESP input file.
+
+
+
+We need, atom 11 = same charge as atom 10,
+
+10 --> 0 → charge change 
+11 --> 10 charge as 11 atom has charge of 10 
+
+$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+ second section
+$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+
+multi conformational fit.
+
+2 ← number of molecules
+    1    1    2    1
+    2
+    1    2    2    2
+    2
+    1    3    2    3
+    2
+    1    4    2    4
+    2
+    1    5    2    5
+    2
+    1    6    2    6
+    2
+    1    7    2    7
+    2
+
+first line just specifies the number of molecules, (always 2 here)Note for those entries that are not zero there must be an equivalent -1 in the RESP input file.
+
+
+second line has the format:
+	MOLECULE_1  ATOM_n MOLECULE_2 ATOM_n
+
+
+floBF-resp.qin # to provide charges for the cap.
+
+ -0.149000  0.097600  0.097600  0.097600 -0.415700  0.271900  0.000000  0.000000
+  0.000000  0.000000  0.000000  0.000000  0.000000  0.000000  0.000000  0.000000
+  0.000000  0.000000  0.000000  0.000000  0.000000  0.000000  0.000000  0.000000
+  0.000000  0.000000  0.000000  0.000000  0.000000  0.000000  0.000000  0.000000
+  0.000000  0.000000  0.000000  0.000000  0.000000  0.000000  0.000000  0.000000
+  0.000000  0.000000 -0.149000  0.097600  0.097600  0.097600 -0.415700  0.271900
+  0.000000  0.000000  0.000000  0.000000  0.000000  0.000000  0.000000  0.000000
+  0.000000  0.000000  0.000000  0.000000  0.000000  0.000000  0.000000  0.000000
+  0.000000  0.000000  0.000000  0.000000  0.000000  0.000000  0.000000  0.000000
+  0.000000  0.000000  0.000000  0.000000  0.000000  0.000000  0.000000  0.000000
+  0.000000  0.000000  0.000000  0.000000
+
+...Note for those entries that are NOT zero there must be an equivalent -1 in the RESP input file. ## (-) sign for do not change 
+
+
+
+
+# 8 entries per line  >>>  the charge of each atom in each molecule > same order as the QM calculation
+# entries that are not zero there must be an equivalent -1 in the RESP input file.
+# here except NME atoms, others have zero initial charge.
+
+QM atom oder >  NME atoms charges from > FF99SB force field charges > others set to zero  
+
+# Note for those entries that are not zero there must be an equivalent -1 in the RESP input file.
+
+
+
+#################################
+v) Run the multicomformational RESP fit for the dye. 
+#################################
+
+Run the multicomformational RESP fit for the dye.
+
+ why we doing charge fitting : 
+
+to transfer charges easily between common functional groups. 
+"Previously, the major weaknesses of these charges have been that they were not easily transferable between common functional groups in related molecules," J. Phys. Chem. 1993,97, 10269-10280,ormational RESP fit (for the dye.)
+
+
+>$AMBERHOME/exe/resp -O -i floBF-resp.in -o floBF-resp.out -p floBF-resp.pch
+                        -t floBF-resp.chg -q floBF-resp.qin -e floBF_esp.dat
+
+
+Input files: floBF-resp.in, floBF-resp.qin, floBF_esp.dat
+Output files: floBF-resp.out, floBF-resp.pch, floBF-resp.chg
+
+
+#######################
+##$#$#$######################################
+1.2) Charge Derivation for the Linker
+###################################################
+#######################
+
+Alright everyone we are now at second stage .. 
+I kind of understood whats happening here, 
+also 
+I change the description document a bit, 
+
+Here they try to attached Linker and DNA together, when we do that, 
+according to force feilds .. 
+
+# atomic number | the second column is N. N = -1, 0 or a positive integer
+In the AMBER FF99 force field standard 'internal' dna (and rna) residues have an integer charge of -1. 
+
+5' residue charge = -0.3079
+3' residue charge = -0.6921 TOTAL = -1
+
+when we looks at figure, we see that 5' --- linker and 3' suger .. 
+
+so, 
+
+5' residue charge ( linker ) of -0.3079 --> modify this part to be in -0.3079 >through RESP fitting
+3' residue charge of -0.6921 ( already defined)
+
+RESP fitting is used to distribute charges .. 
+
+insted of using all the sugar pucker, we can use a methyl group-attached to phospate..
+it has disscussed on .. 
+Cieplak, P., Cornell, W.D., Bayly, C., Kollman, P.A., J.Comp.Chem., 1995, 16(11), 1357-1377 (pdf)
+https://ambermd.org/tutorials/advanced/tutorial1/files/DNA_Resp_fits.pdf
+
+
+need to constrain the atoms of the cap (PO2-O-CH3) = -0.6921 to represent 3' end
+
+#The capping group (PO2-O-CH3) was then constrained to give a total charge of -0.6921. 
+
+#The methyl group was allowed to be freely fit 
+(within the group constraint) 
+
+#since there is no equivalent in the FF99SB force field set that we could fix them to
+
+ACE = nutral = 0 
+ entire construct = -1 , therefore , linker is -0.3079
+
+##########
+i) Optimize Geometry
+#############
+
+Gaussian Input File: ln5_opt.gin
+Output Files: ln5_opt.gout
+
+out file : ln5_opt.gout
+                          Input orientation:                          
+ ---------------------------------------------------------------------
+ Center     Atomic     Atomic              Coordinates (Angstroms)
+ Number     Number      Type              X           Y           Z
+ ---------------------------------------------------------------------
+    1          6  # C           0        0.000000    0.000000    0.000000
+    2          1  # H  ##CH3         0        0.000000    0.000000    1.095249
+    3          1  #H           0        1.037343    0.000000   -0.351331
+    4          1   #H           0       -0.487111    0.923445   -0.326268
+    5          6   C          0       -0.823591   -1.185894   -0.494420
+    6          8   O          0       -2.030344   -1.253071   -0.286004
+    7          7   N          0       -0.115901   -2.145997   -1.156027
+    8          1    H         0        0.873713   -2.002617   -1.299607
+    9          6   O          0       -0.711544   -3.346817   -1.734115
+
+PDB File: ln5_opt.pdb
+
+##############
+ii) Calculate Electrostatic Potential
+##############
+
+Gaussian Input File: ln5_hf.gin
+Output Files: ln5_hf.gout
+
+These ESP fit centers are points created in grid layer above the molecule.. XYZ corrdinates,
+    ESP Fit Center   36 is at   7.860527 -0.922438  2.818614
+      ESP Fit Center   37 is at   8.087835 -0.828284  2.818614
+      ESP Fit Center   38 is at   8.283029 -0.678506  2.818614
+
+Atomic centers are USELESS.. but related to ATOM charges..
+
+ESP related to FIT charges
+
+
+##############
+iii) Convert the Gaussian ESP fit into the RESP format  , 
+
+#this code mention in the tutorial cannot be found.. we can use another script to extract data.. 
+################
+
+%%%%%%%%%%%%%%%%%%%%%%%
+		esp.sh
+		#!/bin/csh
+		xlf /usr/local/apps/amber9/src/resp/readit.f
+		grep "Atomic Center " $1 > a
+		grep "ESP Fit" $1 > b
+		grep "Fit    " $1 > c
+		./a.out 
+		rm -f a b c a.out readit.o
+%%%%%%%%%%%%%%%%%%%%%%
+
+Run the esp.sh:
+
+>./esp.sh ln5_hf.gout
+enter natom,nesp:
+
+Enter 35, 79216.
+
+esp.dat , rename to ln5_esp.dat.
+
+
+################
+iv) Generate the input files for RESP
+################
+
+we are doing the charge fitting for one molecule.. ## not like before ( not a multiconformational ..
+
+ linker_resp.in required ..
+%%%%%%%%%%%%%%%%%%
+		ln5 RESP run #1
+		 &cntrl 
+		 ihfree=1, 
+		 qwt=0.0005, 
+		 iqopt=2  
+		 /
+%%%%%%%%%%%%%%%%%%%%%
+
+no we do not define nmol,  cox this is one molecule , not a multiconformational fit.
+
+REMEBR THE ODER ? 
+1.0 
+link
+   -1   35  # total charge | total number of atoms for molecule 1
+    6   -1  # atomic number (elements look for periodic table , ) | the second column is N. N = -1, 0 or a positive integer
+    1   -1  1 - H
+    1   -1 
+    1   -1 
+    6   -1  6 - C
+    8   -1  8- O
+    7    0  7- N
+    1    0 
+    6    0
+    1    0
+    1    0
+    6    0
+    1    0
+    1    0 
+    6    0
+    1    0
+    1    0
+    6    0
+    1    0
+    1    0 
+    6    0
+    1    0
+    1    0 
+    6    0
+    1    0
+    1    0 
+    8    0
+   15   -1  15 - P 
+    8   -1 
+    8   -1 
+    8   -1
+    6    0
+    1    0
+    1    0 
+    1    0 
+
+## serch for "Input orientation:" in QM Calculate Electrostatic Potential **OUT** file 
+
+let see where is this pattern on QM file  >> it is clear now
+
+*** N=-1 then it tells RESP that this atom's charge should be read from the qin file and constrained to this value , you can define it as -9823489234 also :))) 
+*** A 0 means that it is free to change
+*** a positive integer allows you to specify that two atoms have the same charge (use in the second stage of the fit)
+
+we not doing a multiconformational fit. but need to constrain groups.. 
+
+However, we do need an additional section which defines the group constraint that was discussed above.
+
+    8  -0.69210
+    1   28    1   29    1   30    1   31    1   32    1   33    1   34    1   35
+
+ 8 atom has sum charge -0.69210 to be 3' end 
+
+### 
+
+**** RESP expects no more than 16 values per line so if you had more than 8 atoms this group description would span multiple lines. ****
+
+
+ provide the charges for the caps.
+
+linker-resp1.qin -- file || those charges come from library file FF99-DNA 
+
+ -0.366200  0.112300  0.112300  0.112300  0.597200 -0.567900  0.000000  0.000000
+  0.000000  0.000000  0.000000  0.000000  0.000000  0.000000  0.000000  0.000000
+  0.000000  0.000000  0.000000  0.000000  0.000000  0.000000  0.000000  0.000000
+  0.000000  0.000000  0.000000  1.165900 -0.776100 -0.776100 -0.495400  0.000000
+  0.000000  0.000000  0.000000
+
+
+EG lib.off file in amber 
+ 
+"AN"  - Atom Name
+"AT"  - Atom Type
+typex - atom type index (unused, so always set to 0)
+resx  - residue number
+flags - this is a hexadecimal number in which each attribute is either a 1, 2, 4, or 8 such that simple
+        bitwise operations can be used to test for a certain attribute's existence.  These attributes are
+        used only by LEaP and changed throughout the course of your LEaP session as you perform various
+        actions (for instance, if you select an atom). The attributes are listed below with their hexadecimal 
+        ``yes'' value indicated in parentheses next to it.
+seq   - which number this atom is in the residue's sequence (sequence restarts for each residue in the unit)
+elmnt - atomic number of the atom's element
+chg   - partial atomic charge
+
+#######################
+v) Run %%% fitting Stage 1 %%% of the RESP fit.
+#################################
+
+>$AMBERHOME/exe/resp -O -i linker_resp.in -o linker_resp.out -p linker_resp.pch
+                        -t linker_resp.chg -q linker-resp1.qin -e ln5_esp.dat
+
+
+Input files: linker_resp.in, linker-resp1.qin, ln5_esp.dat
+Output files: linker_resp.out, linker_resp.pch, linker_resp.chg
+
+linker_resp.out has optimized charges, which are reasonable. 
+
+
+####################
+vi) Generate the input files for RESP  %%% fitting stage 2 %%%%
+#######################
+
+all atom charges fixed EXCEPT methyl and methylene groups. --> basically all the entire molecule.
+
+
+minor changes to the input file. ##  linker_resp2.in ##
+
+
+ln5 RESP run #2
+ &cntrl 
+ ihfree=1, 
+ qwt=0.001, 
+ iqopt=2  
+ /
+
+
+ change the weights (qwt) to be 0.001.
+
+
+second section of the file is slightly more complicated that the first stage.
+
+set everything that is not a methyl or methylene hydrogen / carbon to be fixed (-1) and read from the qin file.
+
+linker-resp1.qin
+ -0.366200  0.112300  0.112300  0.112300  0.597200 -0.567900  0.000000  0.000000
+  0.000000  0.000000  0.000000  0.000000  0.000000  0.000000  0.000000  0.000000
+  0.000000  0.000000  0.000000  0.000000  0.000000  0.000000  0.000000  0.000000
+  0.000000  0.000000  0.000000  1.165900 -0.776100 -0.776100 -0.495400  0.000000
+  0.000000  0.000000  0.000000
+
+
+methyl/methylene carbons, and the first hydrogen of each group  SET = 0 , so they can freely change ,
+
+methyl/methylene carbons, and the first hydrogen of each group 
+
+1.0 
+link
+   -1   35
+    6   -1 # first methyl H are constrain. 
+    1   -1
+    1   -1 
+    1   -1 
+    6   -1
+    8   -1 
+    7   -1 
+    1   -1 
+    6    0
+    1    0
+    1   10 This is accomplished by specifying the "atom number" of the first hydrogen in the second column
+    6    0
+    1    0
+    1   13 a positive integer allows you to specify that two atoms have the same charge (use in the second stage of the fit) Hydrogen has atom charge as 13
+    6    0
+    1    0
+    1   16 a positive integer allows you to specify that two atoms have the same charge (use in the second stage of the fit)
+    6    0
+    1    0
+    1   19
+    6    0
+    1    0
+    1   22
+    6    0
+    1    0
+    1   25
+    8   -1 
+   15   -1 
+    8   -1 
+    8   -1 
+    8   -1
+    6    0
+    1    0
+    1   33
+    1   33
+    8  -0.69210
+    1   28    1   29    1   30    1   31    1   32    1   33    1   34    1   35
+
+
+
+######################
+vii) Run Stage 2 of the RESP fit.
+###########################
+
+#We can now run the second stage of the RESP fit. Note that we use the linker-resp.chg file generated as output in stage 1 as the qin (-q) file for stage 2.
+
+>$AMBERHOME/exe/resp -O -i linker_resp2.in -o linker_resp2.out -p linker_resp2.pch
+                        -t linker_resp2.chg -q linker_resp.chg -e ln5_esp.dat
+
+
+       Point Charges Before & After Optimization
+
+    no.  At.no.    q(init)       q(opt)     ivary    d(rstr)/dq
+    1   6      -0.366200      -0.366200     -1       0.002634
+    2   1       0.112300       0.112300     -1       0.000000
+    3   1       0.112300       0.112300     -1       0.000000
+    4   1       0.112300       0.112300     -1       0.000000
+    5   6       0.597200       0.597200     -1       0.001651
+    6   8      -0.567900      -0.567900     -1       0.001734
+    7   7      -0.593772      -0.593772     -1       0.001661
+    8   1       0.283073       0.283073     -1       0.000000
+    9   6       0.380929       0.381146      0       0.002538
+   10   1      -0.008520      -0.030608      0       0.000000
+   11   1      -0.054473      -0.030608     10       0.000000
+   12   6      -0.039731      -0.037220      0       0.009372
+   13   1       0.001145       0.003276      0       0.000000
+   14   1      -0.001831       0.003276     13       0.000000
+   15   6       0.005608      -0.058077      0       0.008647
+   16   1      -0.013909       0.005600      0       0.000000
+   17   1      -0.008631       0.005600     16       0.000000
+   18   6       0.073201       0.128290      0       0.006147
+   19   1      -0.046759      -0.041307      0       0.000000
+   20   1      -0.025881      -0.041307     19       0.000000
+   21   6      -0.001983      -0.057442      0       0.008670
+   22   1      -0.016497       0.027895      0       0.000000
+   23   1       0.053254       0.027895     22       0.000000
+   24   6       0.196344       0.206412      0       0.004360
+   25   1      -0.009351       0.002134      0       0.000000
+   26   1       0.014175       0.002134     25       0.000000
+   27   8      -0.494292      -0.494292     -1       0.001983
+
+
+	okay in next stage we will combine linker and dye, so many steps, I think we are doing a research haha :D 
+see you in next vedio... 
+
+
+
+
+###############################################
+RESP CHARGE Calculation Script
+###############################################
+
+
+#!/bin/csh -f
+echo " "
+echo "  Amber 9   RESP"
+echo " "
+echo RESP stage 1:
+resp -O \
+                -i respfit.1.in \
+                -o total_1st.out \
+                -p total_1st.pch \
+                -q init.charge \
+                -e esp.dat \
+                -t total_1st.chg                || goto error
+
+echo RESP stage 2:
+resp -O \
+                -i respfit.2.in \
+                -o total_2nd.out \
+                -p total_2nd.pch \
+                -e esp.dat \
+                -t total_2nd.chg \
+                -q total_1st.chg                || goto error
+
+echo No errors detected
+exit(0)
+
+error:
+echo Error: check .out and try again
+exit(1)
+
+
+
+
